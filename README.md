@@ -88,3 +88,60 @@ Interface `AccountRepository` :
 La compilation après l’ajout de l’entité et du repository se termine avec `BUILD SUCCESS` :
 
 ![Compilation de l’entité et du repository](images/compilation-account-domain.png)
+
+### 3. Couche service et API REST des comptes
+
+`AccountService` permet de créer un compte, de consulter un compte par UUID et de lister les comptes. `AccountRestController` délègue ces opérations au service.
+
+| Méthode | URL | Résultat |
+| --- | --- | --- |
+| POST | `/accounts` | Création du compte, réponse 201 avec UUID généré |
+| GET | `/accounts` | Liste des comptes, réponse 200 |
+| GET | `/accounts/{id}` | Compte demandé, réponse 200 ou 404 s’il n’existe pas |
+
+La création utilise `CreateAccountRequest`, sans identifiant fourni par le client. La référence client est obligatoire, l’état doit être renseigné, la devise doit comporter trois lettres majuscules et le solde initial doit être positif ou nul. Une requête invalide reçoit une réponse 400. La validation est également appliquée à l’entrée de la couche service pour les futurs connecteurs GraphQL et MCP.
+
+Swagger UI est disponible à l’adresse : http://localhost:8056/swagger-ui/index.html.
+
+Exemple de création :
+
+```json
+{
+  "customerReference": "CLIENT-001",
+  "status": "ACTIVE",
+  "currency": "MAD",
+  "balance": 2500
+}
+```
+
+Les tests d’intégration vérifient la création et la lecture, les erreurs 404/400 et le refus des données invalides sans enregistrement. Résultat de `bash mvnw test` : 3 tests réussis, aucune erreur.
+
+Pour démarrer le service depuis la racine :
+
+```bash
+bash mvnw -pl account-service spring-boot:run
+```
+
+Les comptes sont stockés dans H2 en mémoire : ils sont perdus à l’arrêt du service.
+
+#### Tests dans Swagger UI
+
+Création du compte `CLIENT-001` avec un solde de 2500 MAD : réponse 201 avec un UUID généré.
+
+![Création du compte - 201](images/swagger-account-create-201.png)
+
+Consultation de la liste des comptes : réponse 200 contenant le compte créé.
+
+![Liste des comptes - 200](images/swagger-account-list-200.png)
+
+Consultation du compte avec son UUID : réponse 200 avec les mêmes informations.
+
+![Consultation par UUID - 200](images/swagger-account-get-200.png)
+
+Consultation d’un UUID inexistant : réponse 404 avec le message « Compte introuvable ».
+
+![Compte introuvable - 404](images/swagger-account-not-found-404.png)
+
+Tentative de création avec un solde initial de -500 : la requête est refusée avec une réponse 400.
+
+![Solde initial négatif - 400](images/swagger-account-invalid-400.png)
