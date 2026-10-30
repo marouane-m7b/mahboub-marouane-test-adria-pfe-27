@@ -44,5 +44,6 @@
         <module>config-service</module>
         <module>gateway-service</module>
         <module>ebank-bot</module>
+        <module>transaction-event-consumer</module>
     </modules>
 </project>

@@ -30,7 +30,7 @@ class TransactionServiceTests {
     void setUp() {
         repository = mock(TransactionRepository.class);
         gateway = mock(AccountGateway.class);
-        service = new TransactionService(repository, gateway, new BigDecimal("1000"));
+        service = new TransactionService(repository, gateway, new BigDecimal("1000"), mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     @Test

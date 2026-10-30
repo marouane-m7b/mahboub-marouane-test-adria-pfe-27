@@ -528,8 +528,45 @@ Test du chatbot dans Swagger : la réponse 200 contient les comptes et les solde
 
 ![Chatbot REST avec les outils MCP](images/swagger-chatbot-200.png)
 
+## Partie F - Communication asynchrone avec Kafka
+
+Après le commit réussi d’une transaction, `TransactionEventPublisher` publie un événement JSON dans `bank.transactions.created`. La clé Kafka est l’UUID du compte (`accountId`). La publication s’appuie sur `@TransactionalEventListener(AFTER_COMMIT)` ; une transaction annulée ne déclenche pas cette publication.
+
+Le message contient `eventId`, `eventType`, `transactionId`, `accountId`, `amount`, `currency` et `occurredAt`. Un virement produit un événement pour chaque écriture (débit et crédit).
+
+Le module technique `transaction-event-consumer` écoute le topic avec le groupe `bank-transaction-logger`. Il journalise la clé, la partition, l’offset et le contenu. Il ne possède pas de repository et ne modifie pas les comptes ou les transactions.
+
+Le broker local fonctionne avec Docker en mode KRaft :
+
+```bash
+docker compose -f compose.kafka.yml up -d
+java -jar transaction-event-consumer/target/transaction-event-consumer-0.0.1-SNAPSHOT.jar
+```
+
+Le serveur Kafka écoute sur `localhost:9092`, configurable avec `KAFKA_BOOTSTRAP_SERVERS`. Le consumer expose sa santé sur `http://localhost:8059/actuator/health`.
+
+Pour observer les événements en ligne de commande :
+
+```bash
+docker exec adria-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic bank.transactions.created --from-beginning --max-messages 1 --property print.key=true
+```
+
+La publication après commit reste une solution simple : elle n’est pas atomique avec la base de données. Si Kafka est indisponible après le commit, l’échec est journalisé et l’événement peut être perdu ; une outbox persistante serait nécessaire pour garantir sa reprise. L’idempotence du producteur Kafka limite les doublons techniques, sans rendre l’opération bancaire idempotente.
+
+### Capture de validation : compte introuvable
+
+La requête `POST /transactions` ci-dessous retourne HTTP 400 avec le message `Compte introuvable` : l’UUID fourni ne correspond pas à un compte existant. Cette capture documente le rejet de la transaction, pas une publication Kafka réussie. Aucun événement de transaction créée n’est attendu pour cette requête rejetée.
+
+![Transaction rejetée : compte introuvable (HTTP 400)](images/swagger-transaction-account-not-found-400.png)
+
+Pour attester le fonctionnement de Kafka, compléter avec une transaction valide (HTTP 201), le journal `TransactionCreated published` du producteur et le journal `Transaction event received` du consumer portant le même `transactionId`.
+
+Vérification réelle : une transaction de 25 MAD a répondu 201. Le consumer a reçu un événement `TransactionCreated` contenant le même `transactionId`, avec `accountId` comme clé Kafka. Le solde source est passé de 2400 à 2375 MAD, sans seconde modification par le consumer.
+
+Démarrer le service transactions avant le consumer pour que le topic soit créé avec ses trois partitions.
+
 ## Avancement et parties restantes
 
-Les parties B, C et D sont développées. L’assistant de la partie E répond par REST avec les outils MCP ; sa capture de test est intégrée au rapport. Les intégrations Telegram et Discord ne sont pas retenues.
+Les parties B, C, D et F sont développées. L’assistant de la partie E répond par REST avec les outils MCP ; sa capture de test est intégrée au rapport. Les intégrations Telegram et Discord ne sont pas retenues.
 
-Les parties suivantes restent à développer : communication Kafka et consumer (F), client web ou mobile (G), détection de fraude Python (H), Docker Compose et pipeline CI/CD (I). Keycloak figure dans l’architecture cible, mais n’est pas encore intégré. Le rapport est une version intermédiaire qui sera complétée avec ces réalisations.
+Les parties suivantes restent à développer : client web ou mobile (G), détection de fraude Python (H), Docker Compose et pipeline CI/CD (I). Keycloak figure dans l’architecture cible, mais n’est pas encore intégré. Le rapport est une version intermédiaire qui sera complétée avec ces réalisations.

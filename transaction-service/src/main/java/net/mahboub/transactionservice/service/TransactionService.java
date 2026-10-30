@@ -9,6 +9,8 @@ import net.mahboub.transactionservice.domain.BankTransaction;
 import net.mahboub.transactionservice.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import net.mahboub.transactionservice.event.TransactionCreatedEvent;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -26,12 +28,14 @@ public class TransactionService {
     private final TransactionRepository repository;
     private final AccountGateway accountGateway;
     private final BigDecimal maxAmount;
+    private final ApplicationEventPublisher events;
 
     public TransactionService(TransactionRepository repository, AccountGateway accountGateway,
-            @Value("${bank.transaction.max-amount}") BigDecimal maxAmount) {
+            @Value("${bank.transaction.max-amount}") BigDecimal maxAmount, ApplicationEventPublisher events) {
         this.repository = repository;
         this.accountGateway = accountGateway;
         this.maxAmount = maxAmount;
+        this.events = events;
     }
 
     public List<BankTransaction> listTransactions(UUID accountId) {
@@ -63,6 +67,7 @@ public class TransactionService {
                 .build();
         transaction = repository.saveAndFlush(transaction);
         accountGateway.debit(request.accountId(), new DebitRequest(request.amount(), request.currency()));
+        events.publishEvent(TransactionCreatedEvent.from(transaction));
         return transaction;
     }
 
@@ -96,6 +101,8 @@ public class TransactionService {
                 .merchantCategory("TRANSFER").country("N/A").createdAt(now)
                 .direction(TransactionDirection.CREDIT).transferId(transferId).build());
         accountGateway.transfer(request);
+        events.publishEvent(TransactionCreatedEvent.from(debit));
+        events.publishEvent(TransactionCreatedEvent.from(credit));
         return new TransferResult(transferId, debit, credit);
     }
 }
