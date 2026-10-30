@@ -269,3 +269,15 @@ Création du compte `CLIENT-MCP` avec un solde de 2000 MAD dans MCP Inspector :
 Consultation du compte `CLIENT-MCP` par UUID dans MCP Inspector :
 
 ![Consultation du compte avec MCP](images/mcp-account-get.png)
+
+### 6. Initialisation de transaction-service
+
+Le module `transaction-service` est ajouté au POM parent. Il utilisera le port 8057 et une base H2 distincte `transactions-db`.
+
+L’entité `BankTransaction` contient un UUID généré, `accountId`, un montant `BigDecimal`, la devise, la catégorie du commerçant, le pays et la date `Instant`. `TransactionRepository` permet de consulter les transactions d’un compte avec `findByAccountId`.
+
+Les opérations métier et les connecteurs seront ajoutés ensuite. Le serveur MCP de ce module reste désactivé pendant cette initialisation.
+
+Compilation du parent et des deux modules :
+
+![Compilation des deux microservices](images/compilation-transaction-module.png)
