@@ -43,8 +43,30 @@ Un virement doit vérifier les deux comptes avant de débiter la source et de cr
 
 L’expérimentation Python de détection de fraude sera réalisée séparément, sans intégration aux microservices. Docker Compose et GitHub Actions seront traités dans la partie DevOps.
 
-Les diagrammes représentent la conception prévue ; les services ne sont pas encore implémentés dans ce dépôt.
+Les diagrammes représentent la conception prévue.
 
 ### Images des diagrammes
 
 Les diagrammes sont disponibles au format PNG dans [conception/](conception/) et une copie est conservée dans `images/`.
+
+## Partie C - Microservices fonctionnels
+
+### 1. Initialisation du projet
+
+Le projet Maven parent `adria-bank` regroupe les modules. Le premier module est `account-service`, configuré avec Java 21, Spring Boot 4.0.8, Spring Web MVC, Spring Data JPA et H2, comme dans le projet exemple.
+
+Le service utilise le port `8056` et une base H2 en mémoire `accounts-db`. Les entités et les connecteurs REST, GraphQL et MCP seront ajoutés dans les étapes suivantes.
+
+Compilation depuis la racine :
+
+```bash
+bash mvnw compile
+```
+
+Le POM parent déclare le module `account-service` :
+
+![Projet Maven parent](images/initialisation-maven.png)
+
+La commande `bash mvnw compile` compile le parent et le module avec succès :
+
+![Compilation du projet](images/compilation-account-service.png)

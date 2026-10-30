@@ -1,1 +1,13 @@
 /archive/
+
+# Maven
+**/target/
+
+# IDE
+.idea/
+*.iml
+
+# Secrets
+.env
+.env.*
+!.env.example
