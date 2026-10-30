@@ -1,6 +1,12 @@
 # Test ADRIA PFE 2027 - Mahboub Marouane
 
-Ce README présente les étapes du TP. Le rapport PDF sera préparé à la fin, à partir du travail réalisé et des captures des tests.
+Ce README présente les étapes du TP. Le [rapport PDF intermédiaire](rapport/rapport_adria.pdf) reprend les réalisations et les captures disponibles. Il sera complété avec les prochaines parties.
+
+## Partie A - Préparation
+
+Le dépôt GitHub privé `mahboub-marouane-test-adria-pfe-27` a été créé et le Google Sheet a été rempli. Le projet utilise un parent Maven avec un module par microservice. Le travail est suivi par des commits successifs.
+
+La remise finale comprendra le code source et le rapport PDF. Le passage du dépôt en public et le dépôt sur Classroom seront effectués à la fin.
 
 ## Partie B - Conception et Architecture
 
@@ -55,7 +61,7 @@ Les diagrammes sont disponibles au format PNG dans [conception/](conception/) et
 
 Le projet Maven parent `adria-bank` regroupe les modules. Le premier module est `account-service`, configuré avec Java 21, Spring Boot 4.0.8, Spring Web MVC, Spring Data JPA et H2, comme dans le projet exemple.
 
-Le service utilise le port `8056` et une base H2 en mémoire `accounts-db`. Les entités et les connecteurs REST, GraphQL et MCP seront ajoutés dans les étapes suivantes.
+Le service utilise le port `8056` et une base H2 en mémoire `accounts-db`. Les captures suivantes retracent son initialisation avant l’ajout des entités et des connecteurs.
 
 Compilation depuis la racine :
 
@@ -276,7 +282,7 @@ Le module `transaction-service` est ajouté au POM parent. Il utilisera le port 
 
 L’entité `BankTransaction` contient un UUID généré, `accountId`, un montant `BigDecimal`, la devise, la catégorie du commerçant, le pays et la date `Instant`. `TransactionRepository` permet de consulter les transactions d’un compte avec `findByAccountId`.
 
-Les opérations métier et les connecteurs seront ajoutés ensuite. Le serveur MCP de ce module reste désactivé pendant cette initialisation.
+Le serveur MCP de ce module était désactivé pendant cette initialisation ; les opérations métier et les connecteurs présentés ci-dessous ont ensuite été ajoutés.
 
 Compilation du parent et des deux modules :
 
@@ -288,7 +294,7 @@ Compilation du parent et des deux modules :
 
 `AccountClient` utilise OpenFeign pour consulter le compte et appeler `POST /accounts/{id}/debit`. Le service comptes verrouille la ligne pendant le débit et revérifie le solde, l’état et la devise avant la mise à jour.
 
-Le plafond est pour le moment configuré localement avec `bank.transaction.max-amount=1000`. Il sera partagé par Config Server dans la partie D.
+Le plafond était initialement local. Il est maintenant partagé par Config Server avec `bank.transaction.max-amount=1000`, comme présenté dans la partie D.
 
 `AccountGateway` protège les appels avec un circuit breaker Resilience4J : fenêtre de 5 appels, minimum 3 appels, seuil d’échec 50 %, ouverture pendant 10 secondes. Les délais OpenFeign sont de 2 secondes pour la connexion et 3 secondes pour la lecture. Aucun retry automatique n’est effectué sur les écritures. Une indisponibilité produit une réponse 503, sans inventer de solde ni accepter l’opération par défaut.
 
@@ -495,7 +501,7 @@ Le module `ebank-bot` expose un chatbot REST sur le port 8058. Il utilise Spring
 
 Le chatbot utilise les outils MCP, sans accès direct aux repositories. Il ne doit pas inventer de comptes, d’UUID ou de soldes, ni répéter automatiquement une écriture en erreur. Chaque requête est indépendante, sans mémoire de conversation partagée.
 
-La clé `GROQ_API_KEY` est chargée depuis l’environnement ou le fichier `.env` local ignoré par Git. Le test principal se fait par REST. Un adaptateur Telegram est également présent, mais désactivé par défaut ; aucune intégration Discord n’est ajoutée.
+La clé `GROQ_API_KEY` est chargée depuis l’environnement ou le fichier `.env` local ignoré par Git. Le chatbot est exposé uniquement par REST, sans dépendance Telegram ou Discord.
 
 Démarrer le bot depuis la racine, après les serveurs MCP :
 
@@ -515,6 +521,15 @@ Endpoint direct : `POST http://localhost:8058/chat`. Via la gateway : `POST http
 
 La réponse JSON contient le champ `answer`. La disponibilité du fournisseur Groq et une clé valide sont nécessaires pour produire la réponse du LLM.
 
-Telegram est facultatif : `TELEGRAM_ENABLED=true` et `TELEGRAM_TOKEN` permettent de l’activer. Il utilise le même assistant que REST. L’enregistrement a rencontré une erreur réseau lors de la vérification locale ; le test Telegram n’est donc pas validé.
 
 Vérification REST de l’assistant : `POST /chat` a répondu 200 avec les références, UUID et soldes réels renvoyés par les outils MCP (SOURCE-VIREMENT : 2400 MAD, DESTINATION-VIREMENT : 600 MAD). Le modèle utilise `reasoning_format=hidden` afin d’éviter le renvoi d’un champ de raisonnement non accepté par Groq lors des appels d’outils.
+
+Test du chatbot dans Swagger : la réponse 200 contient les comptes et les soldes obtenus avec les outils MCP.
+
+![Chatbot REST avec les outils MCP](images/swagger-chatbot-200.png)
+
+## Avancement et parties restantes
+
+Les parties B, C et D sont développées. L’assistant de la partie E répond par REST avec les outils MCP ; sa capture de test est intégrée au rapport. Les intégrations Telegram et Discord ne sont pas retenues.
+
+Les parties suivantes restent à développer : communication Kafka et consumer (F), client web ou mobile (G), détection de fraude Python (H), Docker Compose et pipeline CI/CD (I). Keycloak figure dans l’architecture cible, mais n’est pas encore intégré. Le rapport est une version intermédiaire qui sera complétée avec ces réalisations.
