@@ -319,3 +319,67 @@ Le compte passe de 2500 à 2250 MAD après le débit :
 Une transaction de 1500 est refusée car elle dépasse le plafond de 1000 :
 
 ![Dépassement du plafond - 400](images/swagger-transaction-limit.png)
+
+### 8. GraphQL et MCP des transactions
+
+`TransactionGraphqlController` et `TransactionMcpTools` appellent le même `TransactionService` que REST. La vérification du plafond, du compte, de la devise et du solde est donc commune aux trois connecteurs.
+
+GraphiQL transactions : http://localhost:8057/graphiql.
+
+```graphql
+mutation {
+  createTransaction(input: {
+    accountId: "UUID_DU_COMPTE"
+    amount: 100
+    currency: "MAD"
+    merchantCategory: "SHOPPING"
+    country: "MA"
+  }) {
+    id
+    accountId
+    amount
+    currency
+    createdAt
+  }
+}
+```
+
+```graphql
+query {
+  transactions {
+    id
+    accountId
+    amount
+    currency
+    createdAt
+  }
+}
+```
+
+La requête accepte aussi `transactions(accountId: "UUID_DU_COMPTE")`. Le schéma utilise `Float` pour le montant à l’interface GraphQL et `BigDecimal` côté Java ; un scalaire décimal serait préférable pour une précision monétaire exacte de bout en bout.
+
+Le serveur MCP transactions est disponible sur `http://localhost:8057/mcp` avec les outils `create_transaction`, `list_transactions` et `get_account_transactions`.
+
+Paramètres JSON de `create_transaction` dans MCP Inspector :
+
+```json
+{
+  "request": {
+    "accountId": "UUID_DU_COMPTE",
+    "amount": 50,
+    "currency": "MAD",
+    "merchantCategory": "SHOPPING",
+    "country": "MA"
+  }
+}
+```
+
+Validation : 17 tests réussis sur les deux modules. Les tests des connecteurs transactions vérifient la création GraphQL, la lecture par REST, le rejet des montants invalides et le rollback local si le débit distant échoue.
+
+Création d’une transaction depuis GraphiQL :
+
+![Création GraphQL d’une transaction](images/graphql-transaction-create.png)
+
+Consultation des transactions depuis MCP Inspector :
+
+![Liste des transactions avec MCP](images/mcp-transaction-list.png)
