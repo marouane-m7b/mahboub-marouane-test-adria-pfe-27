@@ -1,0 +1,670 @@
+\documentclass[11pt,a4paper]{report}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm,headheight=15pt]{geometry}
+\usepackage{graphicx,xcolor,float,booktabs,array,listings,fancyhdr,tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{caption}
+\definecolor{accent}{RGB}{20,65,100}
+\definecolor{codebg}{RGB}{245,247,249}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small Test ADRIA PFE 2027}
+\fancyhead[R]{\small MAHBOUB Marouane}
+\fancyfoot[C]{\thepage}
+\setlength{\parindent}{0pt}\setlength{\parskip}{6pt}
+\setlength{\emergencystretch}{3em}
+\setcounter{tocdepth}{1}
+\lstset{basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codebg},
+frame=single,rulecolor=\color{accent},breaklines=true,columns=fullflexible,
+keepspaces=true,showstringspaces=false,upquote=true}
+\captionsetup{font=small,labelfont=bf}
+\newcommand{\capture}[2]{\begin{figure}[H]\centering
+\includegraphics[width=\linewidth,height=0.64\textheight,keepaspectratio]{#1}
+\caption{#2}\end{figure}}
+\begin{document}
+\hypersetup{pageanchor=false}
+\begin{titlepage}\centering
+\includegraphics[width=0.52\textwidth,height=2.5cm,keepaspectratio]{figures/enset-logo.png}\par
+\vspace{0.5cm}
+{\Large Université Hassan II de Casablanca\par}
+{\large ENSET Mohammedia\par}
+\vspace{1.1cm}
+{\Large Épreuve technique de sélection PFE\par}
+\vspace{0.7cm}\rule{\linewidth}{1pt}
+\vspace{0.6cm}
+{\Huge\bfseries\color{accent} Rapport de réalisation\par}
+\vspace{0.7cm}
+{\LARGE Plateforme bancaire\par à architecture microservices\par}
+\vspace{0.5cm}
+{\Large Spring Cloud, REST, GraphQL, MCP et Spring AI\par}
+\vspace{0.6cm}\rule{\linewidth}{1pt}\par
+\vspace{1cm}
+\begin{tabular}{ll}
+\textbf{Réalisé par :} & MAHBOUB Marouane\\[0.3cm]
+\textbf{Projet :} & Test ADRIA PFE 2027\\[0.3cm]
+\textbf{Version :} & Rapport intermédiaire
+\end{tabular}
+\vfill
+{\large Année universitaire 2026--2027\par}
+{\large 30 octobre 2026\par}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+\tableofcontents\clearpage
+\chapter*{Présentation du projet}
+\addcontentsline{toc}{chapter}{Présentation du projet}
+Ce projet porte sur une plateforme bancaire composée de deux microservices métier :
+la gestion des comptes et l'enregistrement des transactions. Les opérations sont
+exposées par REST, GraphQL et MCP. Des services Spring Cloud assurent la découverte,
+le routage et la configuration partagée. Un assistant Spring AI utilise les outils
+MCP pour interroger les données bancaires.
+
+Ce rapport présente les développements réalisés et les captures obtenues pendant
+les tests. Il reprend le README du dépôt et sera complété au fur et à mesure du TP.
+Les diagrammes représentent l'architecture cible ; les composants encore à réaliser
+sont distingués dans le dernier chapitre.
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\linewidth}{lX}\toprule
+Élément & Choix retenu\\\midrule
+Langage & Java 21\\
+Frameworks & Spring Boot 4.0.8, Spring Cloud 2025.1.3, Spring AI 2.0.1\\
+Persistance & Spring Data JPA et H2 en mémoire, une base par service métier\\
+Interfaces & REST avec Swagger UI, GraphQL avec GraphiQL, MCP Streamable HTTP\\
+Assistant & Groq, modèle \texttt{openai/gpt-oss-120b}\\
+Dépôt & \url{https://github.com/marouane-m7b/mahboub-marouane-test-adria-pfe-27}\\\bottomrule
+\end{tabularx}\caption{Environnement du projet.}\end{table}
+\clearpage
+
+
+\chapter{Partie A - Préparation}
+
+Le dépôt GitHub privé \nolinkurl{mahboub-marouane-test-adria-pfe-27} a été créé et le Google Sheet a été rempli. Le projet utilise un parent Maven avec un module par microservice. Le travail est suivi par des commits successifs.
+
+La remise finale comprendra le code source et le rapport PDF. Le passage du dépôt en public et le dépôt sur Classroom seront effectués à la fin.
+
+\chapter{Partie B - Conception et Architecture}
+
+\section{Diagramme de classes}
+
+Le modèle contient deux classes principales :
+
+\begin{itemize}
+\item \textbf{Account} : un compte bancaire avec son client, son état, sa devise et son solde.
+\item \textbf{Transaction} : une opération bancaire liée à un compte par \nolinkurl{accountId}.
+\end{itemize}
+
+Un compte peut avoir plusieurs transactions. Son état est \nolinkurl{ACTIVE} ou \nolinkurl{BLOCKED}. Chaque microservice possède sa base de données : le lien entre les deux classes est logique, sans relation JPA entre les services.
+
+Le diagramme présente également :
+
+\begin{itemize}
+\item \textbf{AccountService} et \textbf{TransactionService} : les opérations et règles métier.
+\item \textbf{AccountRepository} et \textbf{TransactionRepository} : l'accès aux données.
+\item \textbf{AccountClient} : les appels REST du service transactions vers le service comptes avec OpenFeign et Resilience4J. Ces appels passent par l'interface REST du service comptes.
+\end{itemize}
+
+Pour garder le diagramme lisible, les contrôleurs REST, GraphQL et les outils MCP sont présentés dans le schéma d'architecture. Ils appellent les services métier. Le type \nolinkurl{Account} retourné par le client représente les données du compte reçues par HTTP ; il ne s'agit pas d'une entité JPA partagée entre les deux services.
+
+\capture{../conception/diagramme-classes.png}{Diagramme de classes}
+
+\section{Schéma d'architecture}
+
+Le client Angular passe par la gateway pour accéder aux services. \nolinkurl{transaction-service} communique avec \nolinkurl{account-service} avec OpenFeign et Resilience4J pour vérifier le compte et mettre à jour son solde.
+
+Chaque service métier expose REST, GraphQL et MCP. Ces trois interfaces utilisent la même couche service pour appliquer les règles métier : montant positif, plafond, compte actif et devise identique.
+
+\capture{../conception/architecture.png}{Schéma d'architecture}
+
+Les autres composants ont les rôles suivants :
+
+\begin{itemize}
+\item \textbf{Eureka} : découvrir les microservices.
+\item \textbf{Config Server} : partager le plafond \nolinkurl{bank.transaction.max-amount=1000}.
+\item \textbf{Keycloak} : gérer l'authentification et les autorisations.
+\item \textbf{Spring AI} : permettre au chatbot d'utiliser les outils MCP des services, depuis le web, Telegram ou Discord.
+\item \textbf{Kafka} : recevoir un événement après l'enregistrement d'une transaction dans \nolinkurl{bank.transactions.created}, avec \nolinkurl{accountId} comme clé. Le consumer journalise uniquement l'événement.
+\end{itemize}
+
+Un virement doit vérifier les deux comptes avant de débiter la source et de créditer la destination. Il faudra gérer les échecs pour éviter une mise à jour partielle des soldes.
+
+L'expérimentation Python de détection de fraude sera réalisée séparément, sans intégration aux microservices. Docker Compose et GitHub Actions seront traités dans la partie DevOps.
+
+Les diagrammes représentent la conception prévue.
+
+\section{Images des diagrammes}
+
+Les diagrammes sont disponibles au format PNG dans conception/ et une copie est conservée dans \nolinkurl{images/}.
+
+\chapter{Partie C - Microservices fonctionnels}
+
+\section{Initialisation du projet}
+
+Le projet Maven parent \nolinkurl{adria-bank} regroupe les modules. Le premier module est \nolinkurl{account-service}, configuré avec Java 21, Spring Boot 4.0.8, Spring Web MVC, Spring Data JPA et H2, comme dans le projet exemple.
+
+Le service utilise le port \nolinkurl{8056} et une base H2 en mémoire \nolinkurl{accounts-db}. Les captures suivantes retracent son initialisation avant l'ajout des entités et des connecteurs.
+
+Compilation depuis la racine :
+
+\begin{lstlisting}
+bash mvnw compile
+\end{lstlisting}
+
+Le POM parent déclare le module \nolinkurl{account-service} :
+
+\capture{../images/initialisation-maven.png}{Projet Maven parent}
+
+La commande \nolinkurl{bash mvnw compile} compile le parent et le module avec succès :
+
+\capture{../images/compilation-account-service.png}{Compilation du projet}
+
+\section{Entité Account et repository}
+
+L'entité \nolinkurl{Account} contient les champs demandés : \nolinkurl{id} de type UUID, \nolinkurl{customerReference}, \nolinkurl{status}, \nolinkurl{currency} et \nolinkurl{balance}. L'identifiant est généré automatiquement. L'état du compte est enregistré en texte (\nolinkurl{ACTIVE} ou \nolinkurl{BLOCKED}) avec l'énumération \nolinkurl{AccountStatus}.
+
+\nolinkurl{AccountRepository} hérite de \nolinkurl{JpaRepository<Account, UUID>} pour enregistrer et consulter les comptes. Les classes métier se trouvent dans \nolinkurl{domain/} et le repository dans \nolinkurl{repository/}. Lombok génère les accesseurs, les constructeurs et le builder, comme dans le projet exemple.
+
+Entité \nolinkurl{Account} :
+
+\capture{../images/account-entity.png}{Entité Account}
+
+Interface \nolinkurl{AccountRepository} :
+
+\capture{../images/account-repository.png}{AccountRepository}
+
+La compilation après l'ajout de l'entité et du repository se termine avec \nolinkurl{BUILD SUCCESS} :
+
+\capture{../images/compilation-account-domain.png}{Compilation de l'entité et du repository}
+
+\section{Couche service et API REST des comptes}
+
+\nolinkurl{AccountService} permet de créer un compte, de consulter un compte par UUID et de lister les comptes. \nolinkurl{AccountRestController} délègue ces opérations au service.
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\linewidth}{XXX}\toprule
+Méthode & URL & Résultat\\
+\midrule
+POST & \nolinkurl{/accounts} & Création du compte, réponse 201 avec UUID généré\\
+GET & \nolinkurl{/accounts} & Liste des comptes, réponse 200\\
+GET & \nolinkurl{/accounts/{id}} & Compte demandé, réponse 200 ou 404 s'il n'existe pas\\
+\bottomrule\end{tabularx}
+\end{table}
+
+La création utilise \nolinkurl{CreateAccountRequest}, sans identifiant fourni par le client. La référence client est obligatoire, l'état doit être renseigné, la devise doit comporter trois lettres majuscules et le solde initial doit être positif ou nul. Une requête invalide reçoit une réponse 400. La validation est également appliquée à l'entrée de la couche service pour les futurs connecteurs GraphQL et MCP.
+
+Swagger UI est disponible à l'adresse : \url{http://localhost:8056/swagger-ui/index.html}.
+
+Exemple de création :
+
+\begin{lstlisting}
+{
+  "customerReference": "CLIENT-001",
+  "status": "ACTIVE",
+  "currency": "MAD",
+  "balance": 2500
+}
+\end{lstlisting}
+
+Les tests d'intégration vérifient la création et la lecture, les erreurs 404/400 et le refus des données invalides sans enregistrement. Résultat de \nolinkurl{bash mvnw test} : 3 tests réussis, aucune erreur.
+
+Pour démarrer le service depuis la racine :
+
+\begin{lstlisting}
+bash mvnw -pl account-service spring-boot:run
+\end{lstlisting}
+
+Les comptes sont stockés dans H2 en mémoire : ils sont perdus à l'arrêt du service.
+
+\subsection{Tests dans Swagger UI}
+
+Création du compte \nolinkurl{CLIENT-001} avec un solde de 2500 MAD : réponse 201 avec un UUID généré.
+
+\capture{../images/swagger-account-create-201.png}{Création du compte - 201}
+
+Consultation de la liste des comptes : réponse 200 contenant le compte créé.
+
+\capture{../images/swagger-account-list-200.png}{Liste des comptes - 200}
+
+Consultation du compte avec son UUID : réponse 200 avec les mêmes informations.
+
+\capture{../images/swagger-account-get-200.png}{Consultation par UUID - 200}
+
+Consultation d'un UUID inexistant : réponse 404 avec le message « Compte introuvable ».
+
+\capture{../images/swagger-account-not-found-404.png}{Compte introuvable - 404}
+
+Tentative de création avec un solde initial de -500 : la requête est refusée avec une réponse 400.
+
+\capture{../images/swagger-account-invalid-400.png}{Solde initial négatif - 400}
+
+\section{Connecteur GraphQL des comptes}
+
+Le schéma \nolinkurl{graphql/schema.graphqls} expose les requêtes \nolinkurl{accounts}, \nolinkurl{account(id)} et la mutation \nolinkurl{createAccount(input)}. Le contrôleur dans \nolinkurl{web/graphql/} appelle le même \nolinkurl{AccountService} que REST.
+
+GraphiQL : \url{http://localhost:8056/graphiql}. L'endpoint HTTP est \nolinkurl{/graphql}.
+
+Création d'un compte :
+
+\begin{lstlisting}
+mutation {
+  createAccount(input: {
+    customerReference: "CLIENT-GQL"
+    status: ACTIVE
+    currency: "MAD"
+    balance: 1500
+  }) {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+\end{lstlisting}
+
+Liste des comptes :
+
+\begin{lstlisting}
+query {
+  accounts {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+\end{lstlisting}
+
+Consultation par UUID (remplacer \nolinkurl{UUID_DU_COMPTE} par l'identifiant retourné à la création) :
+
+\begin{lstlisting}
+query {
+  account(id: "UUID_DU_COMPTE") {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+\end{lstlisting}
+
+Pour un compte inexistant, utiliser \nolinkurl{00000000-0000-0000-0000-000000000000} : la réponse contient \nolinkurl{account: null} et une erreur \nolinkurl{NOT_FOUND}. Pour vérifier la validation, reprendre la mutation avec \nolinkurl{balance: -100} : une erreur \nolinkurl{BAD_REQUEST} est retournée, sans création de compte.
+
+Contrairement aux réponses REST 404/400, ces erreurs d'exécution GraphQL sont présentes dans le champ \nolinkurl{errors} du JSON avec une réponse HTTP 200.
+
+Validation : \nolinkurl{bash mvnw test} exécute 7 tests réussis (3 REST et 4 GraphQL). Les tests GraphQL couvrent la création, la liste, la consultation, la lecture par REST, le compte inexistant et les données invalides.
+
+Création du compte \nolinkurl{CLIENT-GQL} avec un solde de 1500 MAD depuis GraphiQL :
+
+\capture{../images/graphql-account-create.png}{Création du compte avec GraphQL}
+
+Consultation de la liste des comptes depuis GraphiQL :
+
+\capture{../images/graphql-account-list.png}{Liste des comptes avec GraphQL}
+
+Consultation du compte créé par son UUID :
+
+\capture{../images/graphql-account-get.png}{Consultation du compte avec GraphQL}
+
+Recherche d'un compte inexistant : \nolinkurl{account} vaut \nolinkurl{null} et l'erreur est classée \nolinkurl{NOT_FOUND}.
+
+\capture{../images/graphql-account-not-found.png}{Compte inexistant avec GraphQL}
+
+Création avec un solde négatif : la mutation est refusée avec l'erreur \nolinkurl{BAD_REQUEST}.
+
+\capture{../images/graphql-account-invalid.png}{Solde négatif avec GraphQL}
+
+\section{Connecteur MCP des comptes}
+
+\nolinkurl{AccountMcpTools}, dans le package \nolinkurl{mcp/}, expose trois outils avec Spring AI 2.0.1 :
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\linewidth}{XXX}\toprule
+Outil & Paramètres & Opération\\
+\midrule
+\nolinkurl{list_accounts} & Aucun & Lister les comptes\\
+\nolinkurl{get_account} & \nolinkurl{id} & Consulter un compte par UUID\\
+\nolinkurl{create_account} & \nolinkurl{request} & Créer un compte\\
+\bottomrule\end{tabularx}
+\end{table}
+
+Les outils appellent le même \nolinkurl{AccountService} que REST et GraphQL. La validation du solde initial reste donc identique pour les trois connecteurs.
+
+Le serveur utilise le transport \textbf{Streamable HTTP} à l'adresse \nolinkurl{http://localhost:8056/mcp}. Les annotations \nolinkurl{@McpTool} et \nolinkurl{@McpToolParam} décrivent les outils et leurs paramètres.
+
+Pour ouvrir MCP Inspector :
+
+\begin{lstlisting}
+npx @modelcontextprotocol/inspector
+\end{lstlisting}
+
+Ouvrir l'adresse affichée dans le terminal, sélectionner le transport Streamable HTTP et connecter le serveur \nolinkurl{http://localhost:8056/mcp}.
+
+Paramètres de \nolinkurl{create_account} :
+
+\begin{lstlisting}
+{
+  "request": {
+    "customerReference": "CLIENT-MCP",
+    "status": "ACTIVE",
+    "currency": "MAD",
+    "balance": 2000
+  }
+}
+\end{lstlisting}
+
+Vérifications effectuées sur le serveur : découverte des trois outils, création, consultation par UUID, liste, refus d'un solde négatif et erreur pour un compte inexistant. Les erreurs d'exécution des outils sont signalées par \nolinkurl{isError: true}. Les 7 tests REST/GraphQL passent également après l'ajout de MCP.
+
+Création du compte \nolinkurl{CLIENT-MCP} avec un solde de 2000 MAD dans MCP Inspector :
+
+\capture{../images/mcp-account-create.png}{Création du compte avec MCP}
+
+Consultation du compte \nolinkurl{CLIENT-MCP} par UUID dans MCP Inspector :
+
+\capture{../images/mcp-account-get.png}{Consultation du compte avec MCP}
+
+\section{Initialisation de transaction-service}
+
+Le module \nolinkurl{transaction-service} est ajouté au POM parent. Il utilisera le port 8057 et une base H2 distincte \nolinkurl{transactions-db}.
+
+L'entité \nolinkurl{BankTransaction} contient un UUID généré, \nolinkurl{accountId}, un montant \nolinkurl{BigDecimal}, la devise, la catégorie du commerçant, le pays et la date \nolinkurl{Instant}. \nolinkurl{TransactionRepository} permet de consulter les transactions d'un compte avec \nolinkurl{findByAccountId}.
+
+Le serveur MCP de ce module était désactivé pendant cette initialisation ; les opérations métier et les connecteurs présentés ci-dessous ont ensuite été ajoutés.
+
+Compilation du parent et des deux modules :
+
+\capture{../images/compilation-transaction-module.png}{Compilation des deux microservices}
+
+\section{Transactions REST, OpenFeign et Resilience4J}
+
+\nolinkurl{POST /transactions} enregistre un débit après vérification du montant, du plafond, de l'existence du compte, de son état \nolinkurl{ACTIVE}, de la devise et du solde disponible. \nolinkurl{GET /transactions} liste les opérations ; le paramètre facultatif \nolinkurl{accountId} filtre par compte.
+
+\nolinkurl{AccountClient} utilise OpenFeign pour consulter le compte et appeler \nolinkurl{POST /accounts/{id}/debit}. Le service comptes verrouille la ligne pendant le débit et revérifie le solde, l'état et la devise avant la mise à jour.
+
+Le plafond était initialement local. Il est maintenant partagé par Config Server avec \nolinkurl{bank.transaction.max-amount=1000}, comme présenté dans la partie D.
+
+\nolinkurl{AccountGateway} protège les appels avec un circuit breaker Resilience4J : fenêtre de 5 appels, minimum 3 appels, seuil d'échec 50 \%, ouverture pendant 10 secondes. Les délais OpenFeign sont de 2 secondes pour la connexion et 3 secondes pour la lecture. Aucun retry automatique n'est effectué sur les écritures. Une indisponibilité produit une réponse 503, sans inventer de solde ni accepter l'opération par défaut.
+
+Swagger transactions : \url{http://localhost:8057/swagger-ui/index.html}.
+
+\begin{lstlisting}
+{
+  "accountId": "UUID_DU_COMPTE",
+  "amount": 250,
+  "currency": "MAD",
+  "merchantCategory": "SHOPPING",
+  "country": "MA"
+}
+\end{lstlisting}
+
+Validation : 14 tests réussis (8 comptes et 6 transactions). Les tests couvrent notamment les refus métier, le débit et l'ouverture du circuit breaker. Un test sur les deux services démarrés a confirmé une transaction de 250 MAD, un solde passant de 2500 à 2250, ainsi que le refus du dépassement de plafond, du montant nul, d'une autre devise et d'un compte inexistant.
+
+À ce stade, la transaction locale est annulée si l'appel de débit échoue. Les deux bases ne partagent cependant pas une transaction atomique : si le débit distant réussit mais que sa réponse est perdue ou que le commit local échoue, une réconciliation est nécessaire. La réponse 503 ne garantit donc pas l'absence de débit. L'idempotence et la compensation restent à traiter pour fiabiliser ce scénario.
+
+Création d'une transaction de 250 MAD :
+
+\capture{../images/swagger-transaction-create.png}{Transaction créée - 201}
+
+Le compte passe de 2500 à 2250 MAD après le débit :
+
+\capture{../images/swagger-balance-after-transaction.png}{Solde après transaction}
+
+Une transaction de 1500 est refusée car elle dépasse le plafond de 1000 :
+
+\capture{../images/swagger-transaction-limit.png}{Dépassement du plafond - 400}
+
+\section{GraphQL et MCP des transactions}
+
+\nolinkurl{TransactionGraphqlController} et \nolinkurl{TransactionMcpTools} appellent le même \nolinkurl{TransactionService} que REST. La vérification du plafond, du compte, de la devise et du solde est donc commune aux trois connecteurs.
+
+GraphiQL transactions : \url{http://localhost:8057/graphiql}.
+
+\begin{lstlisting}
+mutation {
+  createTransaction(input: {
+    accountId: "UUID_DU_COMPTE"
+    amount: 100
+    currency: "MAD"
+    merchantCategory: "SHOPPING"
+    country: "MA"
+  }) {
+    id
+    accountId
+    amount
+    currency
+    createdAt
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+query {
+  transactions {
+    id
+    accountId
+    amount
+    currency
+    createdAt
+  }
+}
+\end{lstlisting}
+
+La requête accepte aussi \nolinkurl{transactions(accountId: "UUID_DU_COMPTE")}. Le schéma utilise \nolinkurl{Float} pour le montant à l'interface GraphQL et \nolinkurl{BigDecimal} côté Java ; un scalaire décimal serait préférable pour une précision monétaire exacte de bout en bout.
+
+Le serveur MCP transactions est disponible sur \nolinkurl{http://localhost:8057/mcp} avec les outils \nolinkurl{create_transaction}, \nolinkurl{list_transactions} et \nolinkurl{get_account_transactions}.
+
+Paramètres JSON de \nolinkurl{create_transaction} dans MCP Inspector :
+
+\begin{lstlisting}
+{
+  "request": {
+    "accountId": "UUID_DU_COMPTE",
+    "amount": 50,
+    "currency": "MAD",
+    "merchantCategory": "SHOPPING",
+    "country": "MA"
+  }
+}
+\end{lstlisting}
+
+Validation : 17 tests réussis sur les deux modules. Les tests des connecteurs transactions vérifient la création GraphQL, la lecture par REST, le rejet des montants invalides et le rollback local si le débit distant échoue.
+
+Création d'une transaction depuis GraphiQL :
+
+\capture{../images/graphql-transaction-create.png}{Création GraphQL d'une transaction}
+
+Consultation des transactions depuis MCP Inspector :
+
+\capture{../images/mcp-transaction-list.png}{Liste des transactions avec MCP}
+
+\section{Virement entre comptes}
+
+Le virement est exposé par \nolinkurl{POST /transactions/transfer}, la mutation GraphQL \nolinkurl{transfer(input)} et l'outil MCP \nolinkurl{transfer_money}.
+
+\begin{lstlisting}
+{
+  "sourceAccountId": "UUID_SOURCE",
+  "destinationAccountId": "UUID_DESTINATION",
+  "amount": 100,
+  "currency": "MAD"
+}
+\end{lstlisting}
+
+Les comptes doivent être distincts, actifs et de même devise. Le montant doit être positif, inférieur ou égal au plafond partagé et couvert par le solde source.
+
+Le service comptes verrouille les deux lignes dans un ordre stable et applique le débit et le crédit dans une seule transaction locale. Le service transactions enregistre deux écritures liées par \nolinkurl{transferId}, avec les directions \nolinkurl{DEBIT} et \nolinkurl{CREDIT}. La catégorie \nolinkurl{TRANSFER} et le pays \nolinkurl{N/A} identifient ces écritures internes.
+
+L'atomicité des deux soldes est assurée dans la base comptes. La cohérence entre cette base et la base transactions conserve la limite distribuée décrite plus haut : une réponse perdue ou un échec du commit transactions après le virement distant exige une réconciliation. Aucun retry automatique n'est appliqué.
+
+Vérification du virement sur les services démarrés : 100 MAD transférés, soldes 2500/500 devenus 2400/600. Les virements vers le même compte, au-dessus du plafond et vers un compte bloqué sont refusés. Le refus vers un compte bloqué conserve le solde source.
+
+
+\chapter{Partie D - Microservices techniques}
+
+\section{Eureka Discovery}
+
+Le module \nolinkurl{discovery-service} utilise \nolinkurl{@EnableEurekaServer} et écoute sur le port 8761. Les services comptes, transactions, gateway et configuration s'y enregistrent.
+
+Console Eureka : \url{http://localhost:8761}.
+
+\section{Config Server}
+
+Le module \nolinkurl{config-service} utilise \nolinkurl{@EnableConfigServer} et écoute sur le port 8888. Le profil \nolinkurl{native} lit les fichiers locaux de \nolinkurl{src/main/resources/config-repo/}.
+
+Le fichier partagé \nolinkurl{application.properties} contient :
+
+\begin{lstlisting}
+bank.transaction.max-amount=1000
+\end{lstlisting}
+
+La configuration d'une application se consulte avec \url{http://localhost:8888/transaction-service/default}. Les clients chargent cette configuration au démarrage avec \nolinkurl{spring.config.import}. Le service transactions n'a plus de valeur locale du plafond.
+
+L'URL du serveur de configuration peut être fournie par \nolinkurl{CONFIG_SERVER_URL} et celle d'Eureka par \nolinkurl{EUREKA_URL}. Les secrets restent dans l'environnement, séparés du dépôt de configuration. Les changements du fichier partagé nécessitent ici une reconstruction de Config Server et un redémarrage des clients.
+
+\section{Spring Cloud Gateway}
+
+Le module \nolinkurl{gateway-service} écoute sur le port 9999. Les routes utilisent \nolinkurl{lb://account-service} et \nolinkurl{lb://transaction-service} : les adresses des instances sont obtenues depuis Eureka.
+
+\begin{table}[H]\centering\small
+\begin{tabularx}{\linewidth}{XX}\toprule
+URL gateway & Destination\\
+\midrule
+\nolinkurl{/accounts} et \nolinkurl{/accounts/**} & REST comptes\\
+\nolinkurl{/transactions} et \nolinkurl{/transactions/**} & REST transactions\\
+\nolinkurl{/account/graphql} & GraphQL comptes\\
+\nolinkurl{/transaction/graphql} & GraphQL transactions\\
+\nolinkurl{/account/mcp} & MCP comptes\\
+\nolinkurl{/transaction/mcp} & MCP transactions\\
+\bottomrule\end{tabularx}
+\end{table}
+
+OpenFeign utilise également le nom \nolinkurl{account-service} et Spring Cloud LoadBalancer pour découvrir le service comptes. Une URL explicite reste possible avec la propriété \nolinkurl{bank.account-service.url}.
+
+\section{Démarrage local}
+
+Construire les modules avec Java 21 :
+
+\begin{lstlisting}
+bash mvnw -DskipTests package
+\end{lstlisting}
+
+Démarrer chaque commande dans un terminal distinct, depuis la racine, dans cet ordre :
+
+\begin{lstlisting}
+java -jar discovery-service/target/discovery-service-0.0.1-SNAPSHOT.jar
+java -jar config-service/target/config-service-0.0.1-SNAPSHOT.jar
+java -jar account-service/target/account-service-0.0.1-SNAPSHOT.jar
+java -jar transaction-service/target/transaction-service-0.0.1-SNAPSHOT.jar
+java -jar gateway-service/target/gateway-service-0.0.1-SNAPSHOT.jar
+\end{lstlisting}
+
+Attendre que Config Server soit disponible avant de démarrer les clients. Le registre Eureka et les routes peuvent prendre quelques dizaines de secondes pour se mettre à jour. Les services métier utilisent H2 en mémoire : leurs données sont perdues au redémarrage.
+
+Chaque service expose \nolinkurl{/actuator/health} pour vérifier son démarrage.
+
+\section{Vérification de la Partie D}
+
+\begin{itemize}
+\item Construction des cinq services avec \nolinkurl{bash mvnw -DskipTests package} : \nolinkurl{BUILD SUCCESS}.
+\item Les cinq endpoints \nolinkurl{/actuator/health} répondent \nolinkurl{UP}.
+\item Eureka affiche \nolinkurl{ACCOUNT-SERVICE}, \nolinkurl{TRANSACTION-SERVICE}, \nolinkurl{GATEWAY-SERVICE} et \nolinkurl{CONFIG-SERVICE} avec l'état \nolinkurl{UP}.
+\item Les URL \nolinkurl{http://localhost:9999/accounts} et \nolinkurl{http://localhost:9999/transactions} répondent 200.
+\item Un compte créé par la gateway avec 2500 MAD passe à 2250 MAD après une transaction de 250 MAD, avec l'appel OpenFeign résolu par Eureka.
+\item Une transaction de 1500 est refusée avec le plafond partagé de 1000 chargé depuis Config Server.
+\item Les deux routes GraphQL via la gateway répondent correctement.
+\end{itemize}
+
+La vérification de cette étape porte sur la construction et le fonctionnement des services démarrés ; la suite complète de tests n'a pas été relancée pour cette partie.
+
+Les quatre applications clientes sont enregistrées dans Eureka avec l'état \nolinkurl{UP} :
+
+\capture{../images/eureka-services-up.png}{Services enregistrés dans Eureka}
+
+Config Server fournit le plafond partagé de 1000 au service transactions :
+
+\capture{../images/config-server-transaction-limit.png}{Configuration partagée des transactions}
+
+Consultation des comptes par la gateway sur le port 9999 :
+
+\capture{../images/gateway-accounts.png}{Comptes via la gateway}
+
+\chapter{Partie E - Assistant bancaire Spring AI}
+
+Le module \nolinkurl{ebank-bot} expose un chatbot REST sur le port 8058. Il utilise Spring AI avec le modèle Groq \nolinkurl{openai/gpt-oss-120b}. Son client MCP se connecte aux serveurs comptes et transactions afin de consulter les données et d'exécuter les opérations explicitement demandées.
+
+Le chatbot utilise les outils MCP, sans accès direct aux repositories. Il ne doit pas inventer de comptes, d'UUID ou de soldes, ni répéter automatiquement une écriture en erreur. Chaque requête est indépendante, sans mémoire de conversation partagée.
+
+La clé \nolinkurl{GROQ_API_KEY} est chargée depuis l'environnement ou le fichier \nolinkurl{.env} local ignoré par Git. Le chatbot est exposé uniquement par REST, sans dépendance Telegram ou Discord.
+
+Démarrer le bot depuis la racine, après les serveurs MCP :
+
+\begin{lstlisting}
+java -Djava.net.preferIPv4Stack=true -jar ebank-bot/target/ebank-bot-0.0.1-SNAPSHOT.jar
+\end{lstlisting}
+
+Swagger : \url{http://localhost:8058/swagger-ui/index.html}.
+
+Endpoint direct : \nolinkurl{POST http://localhost:8058/chat}. Via la gateway : \nolinkurl{POST http://localhost:9999/chat}.
+
+\begin{lstlisting}
+{
+  "query": "Liste les comptes bancaires avec leurs references clients, UUID et soldes."
+}
+\end{lstlisting}
+
+La réponse JSON contient le champ \nolinkurl{answer}. La disponibilité du fournisseur Groq et une clé valide sont nécessaires pour produire la réponse du LLM.
+
+
+Vérification REST de l'assistant : \nolinkurl{POST /chat} a répondu 200 avec les références, UUID et soldes réels renvoyés par les outils MCP (SOURCE-VIREMENT : 2400 MAD, DESTINATION-VIREMENT : 600 MAD). Le modèle utilise \nolinkurl{reasoning_format=hidden} afin d'éviter le renvoi d'un champ de raisonnement non accepté par Groq lors des appels d'outils.
+
+Test du chatbot dans Swagger : la réponse 200 contient les comptes et les soldes obtenus avec les outils MCP.
+
+\capture{../images/swagger-chatbot-200.png}{Chatbot REST avec les outils MCP}
+
+\chapter{Partie F - Communication asynchrone avec Kafka}
+
+Après le commit réussi d'une transaction, \nolinkurl{TransactionEventPublisher} publie un événement JSON dans \nolinkurl{bank.transactions.created}. La clé Kafka est l'UUID du compte (\nolinkurl{accountId}). La publication s'appuie sur \nolinkurl{@TransactionalEventListener(AFTER_COMMIT)} ; une transaction annulée ne déclenche pas cette publication.
+
+Le message contient \nolinkurl{eventId}, \nolinkurl{eventType}, \nolinkurl{transactionId}, \nolinkurl{accountId}, \nolinkurl{amount}, \nolinkurl{currency} et \nolinkurl{occurredAt}. Un virement produit un événement pour chaque écriture (débit et crédit).
+
+Le module technique \nolinkurl{transaction-event-consumer} écoute le topic avec le groupe \nolinkurl{bank-transaction-logger}. Il journalise la clé, la partition, l'offset et le contenu. Il ne possède pas de repository et ne modifie pas les comptes ou les transactions.
+
+Le broker local fonctionne avec Docker en mode KRaft :
+
+\begin{lstlisting}
+docker compose -f compose.kafka.yml up -d
+java -jar transaction-event-consumer/target/transaction-event-consumer-0.0.1-SNAPSHOT.jar
+\end{lstlisting}
+
+Le serveur Kafka écoute sur \nolinkurl{localhost:9092}, configurable avec \nolinkurl{KAFKA_BOOTSTRAP_SERVERS}. Le consumer expose sa santé sur \nolinkurl{http://localhost:8059/actuator/health}.
+
+Pour observer les événements en ligne de commande :
+
+\begin{lstlisting}
+docker exec adria-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic bank.transactions.created --from-beginning --max-messages 1 --property print.key=true
+\end{lstlisting}
+
+La publication après commit reste une solution simple : elle n'est pas atomique avec la base de données. Si Kafka est indisponible après le commit, l'échec est journalisé et l'événement peut être perdu ; une outbox persistante serait nécessaire pour garantir sa reprise. L'idempotence du producteur Kafka limite les doublons techniques, sans rendre l'opération bancaire idempotente.
+
+\section{Capture de validation : compte introuvable}
+
+La requête \nolinkurl{POST /transactions} ci-dessous retourne HTTP 400 avec le message \nolinkurl{Compte introuvable} : l'UUID fourni ne correspond pas à un compte existant. Cette capture documente le rejet de la transaction, pas une publication Kafka réussie. Aucun événement de transaction créée n'est attendu pour cette requête rejetée.
+
+\capture{../images/swagger-transaction-account-not-found-400.png}{Transaction rejetée : compte introuvable (HTTP 400)}
+
+Pour attester le fonctionnement de Kafka, compléter avec une transaction valide (HTTP 201), le journal \nolinkurl{TransactionCreated published} du producteur et le journal \nolinkurl{Transaction event received} du consumer portant le même \nolinkurl{transactionId}.
+
+Vérification réelle : une transaction de 25 MAD a répondu 201. Le consumer a reçu un événement \nolinkurl{TransactionCreated} contenant le même \nolinkurl{transactionId}, avec \nolinkurl{accountId} comme clé Kafka. Le solde source est passé de 2400 à 2375 MAD, sans seconde modification par le consumer.
+
+Démarrer le service transactions avant le consumer pour que le topic soit créé avec ses trois partitions.
+
+\chapter{Avancement et parties restantes}
+
+Les parties B, C, D et F sont développées. L'assistant de la partie E répond par REST avec les outils MCP ; sa capture de test est intégrée au rapport. Les intégrations Telegram et Discord ne sont pas retenues.
+
+Les parties suivantes restent à développer : client web ou mobile (G), détection de fraude Python (H), Docker Compose et pipeline CI/CD (I). Keycloak figure dans l'architecture cible, mais n'est pas encore intégré. Le rapport est une version intermédiaire qui sera complétée avec ces réalisations.
+\end{document}

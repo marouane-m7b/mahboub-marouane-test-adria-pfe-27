@@ -11,3 +11,11 @@
 .env
 .env.*
 !.env.example
+
+# Rapport LaTeX et outils locaux
+/.tools/
+/rapport/*.aux
+/rapport/*.log
+/rapport/*.out
+/rapport/*.toc
+/rapport/*.synctex.gz
