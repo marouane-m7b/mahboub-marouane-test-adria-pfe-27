@@ -1,6 +1,8 @@
 package net.mahboub.transactionservice.web.rest;
 
 import jakarta.validation.Valid;
+import net.mahboub.transactionservice.service.TransferRequest;
+import net.mahboub.transactionservice.service.TransferResult;
 import net.mahboub.transactionservice.domain.BankTransaction;
 import net.mahboub.transactionservice.service.CreateTransactionRequest;
 import net.mahboub.transactionservice.service.TransactionService;
@@ -35,5 +37,11 @@ public class TransactionRestController {
     @ResponseStatus(HttpStatus.CREATED)
     public BankTransaction createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
         return transactionService.createTransaction(request);
+    }
+
+    @PostMapping("/transfer")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TransferResult transfer(@Valid @RequestBody TransferRequest request) {
+        return transactionService.transfer(request);
     }
 }

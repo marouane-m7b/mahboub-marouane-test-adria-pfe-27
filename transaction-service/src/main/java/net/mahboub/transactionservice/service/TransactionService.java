@@ -14,6 +14,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import net.mahboub.transactionservice.domain.TransactionDirection;
 import java.util.List;
 import java.util.UUID;
 
@@ -63,5 +64,38 @@ public class TransactionService {
         transaction = repository.saveAndFlush(transaction);
         accountGateway.debit(request.accountId(), new DebitRequest(request.amount(), request.currency()));
         return transaction;
+    }
+
+    @Transactional
+    public TransferResult transfer(@NotNull @Valid TransferRequest request) {
+        if (request.sourceAccountId().equals(request.destinationAccountId())) {
+            throw new TransactionRejectedException("Les comptes doivent etre differents");
+        }
+        if (request.amount().compareTo(maxAmount) > 0) {
+            throw new TransactionRejectedException("Le montant depasse le plafond de " + maxAmount);
+        }
+        AccountSnapshot source = accountGateway.getAccount(request.sourceAccountId());
+        AccountSnapshot destination = accountGateway.getAccount(request.destinationAccountId());
+        if (!"ACTIVE".equals(source.status()) || !"ACTIVE".equals(destination.status())) {
+            throw new TransactionRejectedException("Les deux comptes doivent etre actifs");
+        }
+        if (!request.currency().equals(source.currency()) || !request.currency().equals(destination.currency())) {
+            throw new TransactionRejectedException("Les devises doivent correspondre");
+        }
+        if (BigDecimal.valueOf(source.balance()).compareTo(request.amount()) < 0) {
+            throw new TransactionRejectedException("Solde insuffisant");
+        }
+        UUID transferId = UUID.randomUUID();
+        Instant now = Instant.now();
+        BankTransaction debit = repository.saveAndFlush(BankTransaction.builder()
+                .accountId(request.sourceAccountId()).amount(request.amount()).currency(request.currency())
+                .merchantCategory("TRANSFER").country("N/A").createdAt(now)
+                .direction(TransactionDirection.DEBIT).transferId(transferId).build());
+        BankTransaction credit = repository.saveAndFlush(BankTransaction.builder()
+                .accountId(request.destinationAccountId()).amount(request.amount()).currency(request.currency())
+                .merchantCategory("TRANSFER").country("N/A").createdAt(now)
+                .direction(TransactionDirection.CREDIT).transferId(transferId).build());
+        accountGateway.transfer(request);
+        return new TransferResult(transferId, debit, credit);
     }
 }

@@ -61,4 +61,33 @@ public class AccountService {
         account.setBalance(balance.subtract(request.amount()).doubleValue());
         return accountRepository.save(account);
     }
+
+    @Transactional
+    public List<Account> transfer(@NotNull @Valid TransferRequest request) {
+        if (request.sourceAccountId().equals(request.destinationAccountId())) {
+            throw new AccountOperationException("Les comptes doivent etre differents");
+        }
+        // Stable lock order prevents opposite transfers from locking accounts in reverse order.
+        List<UUID> ids = java.util.stream.Stream.of(request.sourceAccountId(), request.destinationAccountId())
+                .sorted().toList();
+        Account first = accountRepository.findLockedById(ids.get(0))
+                .orElseThrow(() -> new AccountNotFoundException(ids.get(0)));
+        Account second = accountRepository.findLockedById(ids.get(1))
+                .orElseThrow(() -> new AccountNotFoundException(ids.get(1)));
+        Account source = first.getId().equals(request.sourceAccountId()) ? first : second;
+        Account destination = source == first ? second : first;
+        if (source.getStatus() != AccountStatus.ACTIVE || destination.getStatus() != AccountStatus.ACTIVE) {
+            throw new AccountOperationException("Les deux comptes doivent etre actifs");
+        }
+        if (!source.getCurrency().equals(request.currency()) || !destination.getCurrency().equals(request.currency())) {
+            throw new AccountOperationException("Les comptes doivent avoir la meme devise que le virement");
+        }
+        BigDecimal balance = BigDecimal.valueOf(source.getBalance());
+        if (balance.compareTo(request.amount()) < 0) {
+            throw new AccountOperationException("Solde insuffisant");
+        }
+        source.setBalance(balance.subtract(request.amount()).doubleValue());
+        destination.setBalance(BigDecimal.valueOf(destination.getBalance()).add(request.amount()).doubleValue());
+        return List.of(source, destination);
+    }
 }

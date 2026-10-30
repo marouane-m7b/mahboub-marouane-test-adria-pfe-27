@@ -1,6 +1,7 @@
 package net.mahboub.accountservice.web.rest;
 
 import jakarta.validation.Valid;
+import net.mahboub.accountservice.service.TransferRequest;
 import net.mahboub.accountservice.service.DebitRequest;
 import net.mahboub.accountservice.domain.Account;
 import net.mahboub.accountservice.service.AccountService;
@@ -46,5 +47,10 @@ public class AccountRestController {
     @PostMapping("/{id}/debit")
     public Account debit(@PathVariable UUID id, @Valid @RequestBody DebitRequest request) {
         return accountService.debit(id, request);
+    }
+
+    @PostMapping("/transfer")
+    public List<Account> transfer(@Valid @RequestBody TransferRequest request) {
+        return accountService.transfer(request);
     }
 }

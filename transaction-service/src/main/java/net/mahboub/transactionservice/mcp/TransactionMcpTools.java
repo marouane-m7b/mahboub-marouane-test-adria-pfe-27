@@ -1,6 +1,8 @@
 package net.mahboub.transactionservice.mcp;
 
 import net.mahboub.transactionservice.domain.BankTransaction;
+import net.mahboub.transactionservice.service.TransferRequest;
+import net.mahboub.transactionservice.service.TransferResult;
 import net.mahboub.transactionservice.service.CreateTransactionRequest;
 import net.mahboub.transactionservice.service.TransactionService;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -35,5 +37,12 @@ public class TransactionMcpTools {
             @McpToolParam(description = "Compte, montant positif, devise, categorie commercant et pays",
                     required = true) CreateTransactionRequest request) {
         return transactionService.createTransaction(request);
+    }
+
+    @McpTool(name = "transfer_money", description = "Effectuer un virement entre deux comptes actifs de meme devise")
+    public TransferResult transfer(
+            @McpToolParam(description = "Compte source, compte destination, montant et devise", required = true)
+            TransferRequest request) {
+        return transactionService.transfer(request);
     }
 }

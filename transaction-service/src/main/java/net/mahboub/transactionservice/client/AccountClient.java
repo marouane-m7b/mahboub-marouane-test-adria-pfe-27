@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.UUID;
+import java.util.List;
+import net.mahboub.transactionservice.service.TransferRequest;
 
 @FeignClient(name = "account-service", url = "${bank.account-service.url:}")
 public interface AccountClient {
@@ -16,4 +18,7 @@ public interface AccountClient {
 
     @PostMapping("/accounts/{id}/debit")
     AccountSnapshot debit(@PathVariable("id") UUID id, @RequestBody DebitRequest request);
+
+    @PostMapping("/accounts/transfer")
+    List<AccountSnapshot> transfer(@RequestBody TransferRequest request);
 }

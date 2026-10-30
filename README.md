@@ -466,3 +466,24 @@ Config Server fournit le plafond partagé de 1000 au service transactions :
 Consultation des comptes par la gateway sur le port 9999 :
 
 ![Comptes via la gateway](images/gateway-accounts.png)
+
+### 9. Virement entre comptes
+
+Le virement est exposé par `POST /transactions/transfer`, la mutation GraphQL `transfer(input)` et l’outil MCP `transfer_money`.
+
+```json
+{
+  "sourceAccountId": "UUID_SOURCE",
+  "destinationAccountId": "UUID_DESTINATION",
+  "amount": 100,
+  "currency": "MAD"
+}
+```
+
+Les comptes doivent être distincts, actifs et de même devise. Le montant doit être positif, inférieur ou égal au plafond partagé et couvert par le solde source.
+
+Le service comptes verrouille les deux lignes dans un ordre stable et applique le débit et le crédit dans une seule transaction locale. Le service transactions enregistre deux écritures liées par `transferId`, avec les directions `DEBIT` et `CREDIT`. La catégorie `TRANSFER` et le pays `N/A` identifient ces écritures internes.
+
+L’atomicité des deux soldes est assurée dans la base comptes. La cohérence entre cette base et la base transactions conserve la limite distribuée décrite plus haut : une réponse perdue ou un échec du commit transactions après le virement distant exige une réconciliation. Aucun retry automatique n’est appliqué.
+
+Vérification du virement sur les services démarrés : 100 MAD transférés, soldes 2500/500 devenus 2400/600. Les virements vers le même compte, au-dessus du plafond et vers un compte bloqué sont refusés. Le refus vers un compte bloqué conserve le solde source.

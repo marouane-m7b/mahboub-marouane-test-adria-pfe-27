@@ -1,6 +1,8 @@
 package net.mahboub.transactionservice.web.graphql;
 
 import graphql.GraphQLError;
+import net.mahboub.transactionservice.service.TransferRequest;
+import net.mahboub.transactionservice.service.TransferResult;
 import graphql.GraphqlErrorBuilder;
 import jakarta.validation.ConstraintViolationException;
 import net.mahboub.transactionservice.domain.BankTransaction;
@@ -36,6 +38,11 @@ public class TransactionGraphqlController {
     @MutationMapping
     public BankTransaction createTransaction(@Argument("input") CreateTransactionRequest input) {
         return transactionService.createTransaction(input);
+    }
+
+    @MutationMapping
+    public TransferResult transfer(@Argument("input") TransferRequest input) {
+        return transactionService.transfer(input);
     }
 
     @GraphQlExceptionHandler(TransactionRejectedException.class)

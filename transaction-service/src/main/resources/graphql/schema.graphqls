@@ -4,6 +4,7 @@ type Query {
 
 type Mutation {
     createTransaction(input: CreateTransactionInput!): BankTransaction
+    transfer(input: TransferInput!): TransferResult
 }
 
 type BankTransaction {
@@ -14,6 +15,8 @@ type BankTransaction {
     merchantCategory: String!
     country: String!
     createdAt: String!
+    direction: String!
+    transferId: ID
 }
 
 input CreateTransactionInput {
@@ -22,4 +25,17 @@ input CreateTransactionInput {
     currency: String!
     merchantCategory: String!
     country: String!
+}
+
+input TransferInput {
+    sourceAccountId: ID!
+    destinationAccountId: ID!
+    amount: Float!
+    currency: String!
+}
+
+type TransferResult {
+    transferId: ID!
+    debit: BankTransaction!
+    credit: BankTransaction!
 }

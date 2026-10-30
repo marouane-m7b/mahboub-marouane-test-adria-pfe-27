@@ -30,7 +30,11 @@ public class AccountGateway {
         execute(() -> accountClient.debit(id, request));
     }
 
-    private AccountSnapshot execute(Supplier<AccountSnapshot> operation) {
+    public void transfer(net.mahboub.transactionservice.service.TransferRequest request) {
+        execute(() -> accountClient.transfer(request));
+    }
+
+    private <T> T execute(Supplier<T> operation) {
         try {
             return circuitBreaker.executeSupplier(operation);
         } catch (FeignException exception) {
@@ -38,7 +42,7 @@ public class AccountGateway {
                 throw new TransactionRejectedException("Compte introuvable");
             }
             if (exception.status() == 400) {
-                throw new TransactionRejectedException("Debit refuse par le service comptes");
+                throw new TransactionRejectedException("Operation refusee par le service comptes");
             }
             throw new AccountUnavailableException();
         } catch (CallNotPermittedException exception) {
