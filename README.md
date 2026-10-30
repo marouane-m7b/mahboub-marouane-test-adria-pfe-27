@@ -145,3 +145,82 @@ Consultation d’un UUID inexistant : réponse 404 avec le message « Compte int
 Tentative de création avec un solde initial de -500 : la requête est refusée avec une réponse 400.
 
 ![Solde initial négatif - 400](images/swagger-account-invalid-400.png)
+
+### 4. Connecteur GraphQL des comptes
+
+Le schéma `graphql/schema.graphqls` expose les requêtes `accounts`, `account(id)` et la mutation `createAccount(input)`. Le contrôleur dans `web/graphql/` appelle le même `AccountService` que REST.
+
+GraphiQL : http://localhost:8056/graphiql. L’endpoint HTTP est `/graphql`.
+
+Création d’un compte :
+
+```graphql
+mutation {
+  createAccount(input: {
+    customerReference: "CLIENT-GQL"
+    status: ACTIVE
+    currency: "MAD"
+    balance: 1500
+  }) {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+```
+
+Liste des comptes :
+
+```graphql
+query {
+  accounts {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+```
+
+Consultation par UUID (remplacer `UUID_DU_COMPTE` par l’identifiant retourné à la création) :
+
+```graphql
+query {
+  account(id: "UUID_DU_COMPTE") {
+    id
+    customerReference
+    status
+    currency
+    balance
+  }
+}
+```
+
+Pour un compte inexistant, utiliser `00000000-0000-0000-0000-000000000000` : la réponse contient `account: null` et une erreur `NOT_FOUND`. Pour vérifier la validation, reprendre la mutation avec `balance: -100` : une erreur `BAD_REQUEST` est retournée, sans création de compte.
+
+Contrairement aux réponses REST 404/400, ces erreurs d’exécution GraphQL sont présentes dans le champ `errors` du JSON avec une réponse HTTP 200.
+
+Validation : `bash mvnw test` exécute 7 tests réussis (3 REST et 4 GraphQL). Les tests GraphQL couvrent la création, la liste, la consultation, la lecture par REST, le compte inexistant et les données invalides.
+
+Création du compte `CLIENT-GQL` avec un solde de 1500 MAD depuis GraphiQL :
+
+![Création du compte avec GraphQL](images/graphql-account-create.png)
+
+Consultation de la liste des comptes depuis GraphiQL :
+
+![Liste des comptes avec GraphQL](images/graphql-account-list.png)
+
+Consultation du compte créé par son UUID :
+
+![Consultation du compte avec GraphQL](images/graphql-account-get.png)
+
+Recherche d’un compte inexistant : `account` vaut `null` et l’erreur est classée `NOT_FOUND`.
+
+![Compte inexistant avec GraphQL](images/graphql-account-not-found.png)
+
+Création avec un solde négatif : la mutation est refusée avec l’erreur `BAD_REQUEST`.
+
+![Solde négatif avec GraphQL](images/graphql-account-invalid.png)
