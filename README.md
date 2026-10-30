@@ -70,3 +70,21 @@ Le POM parent déclare le module `account-service` :
 La commande `bash mvnw compile` compile le parent et le module avec succès :
 
 ![Compilation du projet](images/compilation-account-service.png)
+
+### 2. Entité Account et repository
+
+L’entité `Account` contient les champs demandés : `id` de type UUID, `customerReference`, `status`, `currency` et `balance`. L’identifiant est généré automatiquement. L’état du compte est enregistré en texte (`ACTIVE` ou `BLOCKED`) avec l’énumération `AccountStatus`.
+
+`AccountRepository` hérite de `JpaRepository<Account, UUID>` pour enregistrer et consulter les comptes. Les classes métier se trouvent dans `domain/` et le repository dans `repository/`. Lombok génère les accesseurs, les constructeurs et le builder, comme dans le projet exemple.
+
+Entité `Account` :
+
+![Entité Account](images/account-entity.png)
+
+Interface `AccountRepository` :
+
+![AccountRepository](images/account-repository.png)
+
+La compilation après l’ajout de l’entité et du repository se termine avec `BUILD SUCCESS` :
+
+![Compilation de l’entité et du repository](images/compilation-account-domain.png)
