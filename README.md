@@ -224,3 +224,48 @@ Recherche d’un compte inexistant : `account` vaut `null` et l’erreur est cla
 Création avec un solde négatif : la mutation est refusée avec l’erreur `BAD_REQUEST`.
 
 ![Solde négatif avec GraphQL](images/graphql-account-invalid.png)
+
+### 5. Connecteur MCP des comptes
+
+`AccountMcpTools`, dans le package `mcp/`, expose trois outils avec Spring AI 2.0.1 :
+
+| Outil | Paramètres | Opération |
+| --- | --- | --- |
+| `list_accounts` | Aucun | Lister les comptes |
+| `get_account` | `id` | Consulter un compte par UUID |
+| `create_account` | `request` | Créer un compte |
+
+Les outils appellent le même `AccountService` que REST et GraphQL. La validation du solde initial reste donc identique pour les trois connecteurs.
+
+Le serveur utilise le transport **Streamable HTTP** à l’adresse `http://localhost:8056/mcp`. Les annotations `@McpTool` et `@McpToolParam` décrivent les outils et leurs paramètres.
+
+Pour ouvrir MCP Inspector :
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+Ouvrir l’adresse affichée dans le terminal, sélectionner le transport Streamable HTTP et connecter le serveur `http://localhost:8056/mcp`.
+
+Paramètres de `create_account` :
+
+```json
+{
+  "request": {
+    "customerReference": "CLIENT-MCP",
+    "status": "ACTIVE",
+    "currency": "MAD",
+    "balance": 2000
+  }
+}
+```
+
+Vérifications effectuées sur le serveur : découverte des trois outils, création, consultation par UUID, liste, refus d’un solde négatif et erreur pour un compte inexistant. Les erreurs d’exécution des outils sont signalées par `isError: true`. Les 7 tests REST/GraphQL passent également après l’ajout de MCP.
+
+Création du compte `CLIENT-MCP` avec un solde de 2000 MAD dans MCP Inspector :
+
+![Création du compte avec MCP](images/mcp-account-create.png)
+
+Consultation du compte `CLIENT-MCP` par UUID dans MCP Inspector :
+
+![Consultation du compte avec MCP](images/mcp-account-get.png)
