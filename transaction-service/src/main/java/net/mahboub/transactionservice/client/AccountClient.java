@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.UUID;
 
-@FeignClient(name = "account-service", url = "${bank.account-service.url}")
+@FeignClient(name = "account-service", url = "${bank.account-service.url:}")
 public interface AccountClient {
 
     @GetMapping("/accounts/{id}")

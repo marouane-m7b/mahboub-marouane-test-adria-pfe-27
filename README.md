@@ -383,3 +383,74 @@ Création d’une transaction depuis GraphiQL :
 Consultation des transactions depuis MCP Inspector :
 
 ![Liste des transactions avec MCP](images/mcp-transaction-list.png)
+
+## Partie D - Microservices techniques
+
+### 1. Eureka Discovery
+
+Le module `discovery-service` utilise `@EnableEurekaServer` et écoute sur le port 8761. Les services comptes, transactions, gateway et configuration s’y enregistrent.
+
+Console Eureka : http://localhost:8761.
+
+### 2. Config Server
+
+Le module `config-service` utilise `@EnableConfigServer` et écoute sur le port 8888. Le profil `native` lit les fichiers locaux de `src/main/resources/config-repo/`.
+
+Le fichier partagé `application.properties` contient :
+
+```properties
+bank.transaction.max-amount=1000
+```
+
+La configuration d’une application se consulte avec http://localhost:8888/transaction-service/default. Les clients chargent cette configuration au démarrage avec `spring.config.import`. Le service transactions n’a plus de valeur locale du plafond.
+
+L’URL du serveur de configuration peut être fournie par `CONFIG_SERVER_URL` et celle d’Eureka par `EUREKA_URL`. Les secrets restent dans l’environnement, séparés du dépôt de configuration. Les changements du fichier partagé nécessitent ici une reconstruction de Config Server et un redémarrage des clients.
+
+### 3. Spring Cloud Gateway
+
+Le module `gateway-service` écoute sur le port 9999. Les routes utilisent `lb://account-service` et `lb://transaction-service` : les adresses des instances sont obtenues depuis Eureka.
+
+| URL gateway | Destination |
+| --- | --- |
+| `/accounts` et `/accounts/**` | REST comptes |
+| `/transactions` et `/transactions/**` | REST transactions |
+| `/account/graphql` | GraphQL comptes |
+| `/transaction/graphql` | GraphQL transactions |
+| `/account/mcp` | MCP comptes |
+| `/transaction/mcp` | MCP transactions |
+
+OpenFeign utilise également le nom `account-service` et Spring Cloud LoadBalancer pour découvrir le service comptes. Une URL explicite reste possible avec la propriété `bank.account-service.url`.
+
+### Démarrage local
+
+Construire les modules avec Java 21 :
+
+```bash
+bash mvnw -DskipTests package
+```
+
+Démarrer chaque commande dans un terminal distinct, depuis la racine, dans cet ordre :
+
+```bash
+java -jar discovery-service/target/discovery-service-0.0.1-SNAPSHOT.jar
+java -jar config-service/target/config-service-0.0.1-SNAPSHOT.jar
+java -jar account-service/target/account-service-0.0.1-SNAPSHOT.jar
+java -jar transaction-service/target/transaction-service-0.0.1-SNAPSHOT.jar
+java -jar gateway-service/target/gateway-service-0.0.1-SNAPSHOT.jar
+```
+
+Attendre que Config Server soit disponible avant de démarrer les clients. Le registre Eureka et les routes peuvent prendre quelques dizaines de secondes pour se mettre à jour. Les services métier utilisent H2 en mémoire : leurs données sont perdues au redémarrage.
+
+Chaque service expose `/actuator/health` pour vérifier son démarrage.
+
+### Vérification de la Partie D
+
+- Construction des cinq services avec `bash mvnw -DskipTests package` : `BUILD SUCCESS`.
+- Les cinq endpoints `/actuator/health` répondent `UP`.
+- Eureka affiche `ACCOUNT-SERVICE`, `TRANSACTION-SERVICE`, `GATEWAY-SERVICE` et `CONFIG-SERVICE` avec l’état `UP`.
+- Les URL `http://localhost:9999/accounts` et `http://localhost:9999/transactions` répondent 200.
+- Un compte créé par la gateway avec 2500 MAD passe à 2250 MAD après une transaction de 250 MAD, avec l’appel OpenFeign résolu par Eureka.
+- Une transaction de 1500 est refusée avec le plafond partagé de 1000 chargé depuis Config Server.
+- Les deux routes GraphQL via la gateway répondent correctement.
+
+La vérification de cette étape porte sur la construction et le fonctionnement des services démarrés ; la suite complète de tests n’a pas été relancée pour cette partie.
