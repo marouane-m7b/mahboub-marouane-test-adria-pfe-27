@@ -69,6 +69,27 @@ class AccountRestTests {
         assertEquals(0, repository.count());
     }
 
+    @Test
+    void debitsAccountAndRejectsOverdraft() throws Exception {
+        assertEquals(201, post("""
+                {"customerReference":"DEBIT-TEST","status":"ACTIVE","currency":"MAD","balance":500}
+                """).statusCode());
+        var id = repository.findAll().getFirst().getId();
+        String url = "http://localhost:" + port + "/accounts/" + id + "/debit";
+        var response = client.send(HttpRequest.newBuilder(URI.create(url))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"amount\":250,\"currency\":\"MAD\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals(250.0, repository.findById(id).orElseThrow().getBalance());
+        var rejected = client.send(HttpRequest.newBuilder(URI.create(url))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"amount\":300,\"currency\":\"MAD\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, rejected.statusCode());
+        assertEquals(250.0, repository.findById(id).orElseThrow().getBalance());
+    }
+
     private HttpResponse<String> get(String path) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());

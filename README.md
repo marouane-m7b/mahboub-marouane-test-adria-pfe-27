@@ -281,3 +281,41 @@ Les opérations métier et les connecteurs seront ajoutés ensuite. Le serveur M
 Compilation du parent et des deux modules :
 
 ![Compilation des deux microservices](images/compilation-transaction-module.png)
+
+### 7. Transactions REST, OpenFeign et Resilience4J
+
+`POST /transactions` enregistre un débit après vérification du montant, du plafond, de l’existence du compte, de son état `ACTIVE`, de la devise et du solde disponible. `GET /transactions` liste les opérations ; le paramètre facultatif `accountId` filtre par compte.
+
+`AccountClient` utilise OpenFeign pour consulter le compte et appeler `POST /accounts/{id}/debit`. Le service comptes verrouille la ligne pendant le débit et revérifie le solde, l’état et la devise avant la mise à jour.
+
+Le plafond est pour le moment configuré localement avec `bank.transaction.max-amount=1000`. Il sera partagé par Config Server dans la partie D.
+
+`AccountGateway` protège les appels avec un circuit breaker Resilience4J : fenêtre de 5 appels, minimum 3 appels, seuil d’échec 50 %, ouverture pendant 10 secondes. Les délais OpenFeign sont de 2 secondes pour la connexion et 3 secondes pour la lecture. Aucun retry automatique n’est effectué sur les écritures. Une indisponibilité produit une réponse 503, sans inventer de solde ni accepter l’opération par défaut.
+
+Swagger transactions : http://localhost:8057/swagger-ui/index.html.
+
+```json
+{
+  "accountId": "UUID_DU_COMPTE",
+  "amount": 250,
+  "currency": "MAD",
+  "merchantCategory": "SHOPPING",
+  "country": "MA"
+}
+```
+
+Validation : 14 tests réussis (8 comptes et 6 transactions). Les tests couvrent notamment les refus métier, le débit et l’ouverture du circuit breaker. Un test sur les deux services démarrés a confirmé une transaction de 250 MAD, un solde passant de 2500 à 2250, ainsi que le refus du dépassement de plafond, du montant nul, d’une autre devise et d’un compte inexistant.
+
+À ce stade, la transaction locale est annulée si l’appel de débit échoue. Les deux bases ne partagent cependant pas une transaction atomique : si le débit distant réussit mais que sa réponse est perdue ou que le commit local échoue, une réconciliation est nécessaire. La réponse 503 ne garantit donc pas l’absence de débit. L’idempotence et la compensation restent à traiter pour fiabiliser ce scénario.
+
+Création d’une transaction de 250 MAD :
+
+![Transaction créée - 201](images/swagger-transaction-create.png)
+
+Le compte passe de 2500 à 2250 MAD après le débit :
+
+![Solde après transaction](images/swagger-balance-after-transaction.png)
+
+Une transaction de 1500 est refusée car elle dépasse le plafond de 1000 :
+
+![Dépassement du plafond - 400](images/swagger-transaction-limit.png)

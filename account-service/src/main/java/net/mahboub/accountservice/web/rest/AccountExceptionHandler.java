@@ -1,6 +1,7 @@
 package net.mahboub.accountservice.web.rest;
 
 import net.mahboub.accountservice.service.AccountNotFoundException;
+import net.mahboub.accountservice.service.AccountOperationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,5 +14,10 @@ public class AccountExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccountNotFoundException.class)
     public ProblemDetail handleAccountNotFound(AccountNotFoundException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(AccountOperationException.class)
+    public ProblemDetail handleOperation(AccountOperationException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 }

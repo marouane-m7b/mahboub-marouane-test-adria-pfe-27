@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
+import net.mahboub.accountservice.domain.AccountStatus;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,6 +41,24 @@ public class AccountService {
                 .currency(request.currency())
                 .balance(request.balance())
                 .build();
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public Account debit(@NotNull UUID id, @NotNull @Valid DebitRequest request) {
+        Account account = accountRepository.findLockedById(id)
+                .orElseThrow(() -> new AccountNotFoundException(id));
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new AccountOperationException("Le compte est bloque");
+        }
+        if (!account.getCurrency().equals(request.currency())) {
+            throw new AccountOperationException("La devise ne correspond pas au compte");
+        }
+        BigDecimal balance = BigDecimal.valueOf(account.getBalance());
+        if (balance.compareTo(request.amount()) < 0) {
+            throw new AccountOperationException("Solde insuffisant");
+        }
+        account.setBalance(balance.subtract(request.amount()).doubleValue());
         return accountRepository.save(account);
     }
 }

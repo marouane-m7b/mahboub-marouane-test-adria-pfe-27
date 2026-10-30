@@ -1,6 +1,7 @@
 package net.mahboub.accountservice.web.rest;
 
 import jakarta.validation.Valid;
+import net.mahboub.accountservice.service.DebitRequest;
 import net.mahboub.accountservice.domain.Account;
 import net.mahboub.accountservice.service.AccountService;
 import net.mahboub.accountservice.service.CreateAccountRequest;
@@ -40,5 +41,10 @@ public class AccountRestController {
     public ResponseEntity<Account> createAccount(@Valid @RequestBody CreateAccountRequest request) {
         Account account = accountService.createAccount(request);
         return ResponseEntity.created(URI.create("/accounts/" + account.getId())).body(account);
+    }
+
+    @PostMapping("/{id}/debit")
+    public Account debit(@PathVariable UUID id, @Valid @RequestBody DebitRequest request) {
+        return accountService.debit(id, request);
     }
 }
