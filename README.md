@@ -454,3 +454,15 @@ Chaque service expose `/actuator/health` pour vérifier son démarrage.
 - Les deux routes GraphQL via la gateway répondent correctement.
 
 La vérification de cette étape porte sur la construction et le fonctionnement des services démarrés ; la suite complète de tests n’a pas été relancée pour cette partie.
+
+Les quatre applications clientes sont enregistrées dans Eureka avec l’état `UP` :
+
+![Services enregistrés dans Eureka](images/eureka-services-up.png)
+
+Config Server fournit le plafond partagé de 1000 au service transactions :
+
+![Configuration partagée des transactions](images/config-server-transaction-limit.png)
+
+Consultation des comptes par la gateway sur le port 9999 :
+
+![Comptes via la gateway](images/gateway-accounts.png)
