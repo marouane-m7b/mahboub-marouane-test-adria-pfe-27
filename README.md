@@ -384,6 +384,28 @@ Consultation des transactions depuis MCP Inspector :
 
 ![Liste des transactions avec MCP](images/mcp-transaction-list.png)
 
+### 9. Virement entre comptes
+
+Le virement est exposé par `POST /transactions/transfer`, la mutation GraphQL `transfer(input)` et l’outil MCP `transfer_money`.
+
+```json
+{
+  "sourceAccountId": "UUID_SOURCE",
+  "destinationAccountId": "UUID_DESTINATION",
+  "amount": 100,
+  "currency": "MAD"
+}
+```
+
+Les comptes doivent être distincts, actifs et de même devise. Le montant doit être positif, inférieur ou égal au plafond partagé et couvert par le solde source.
+
+Le service comptes verrouille les deux lignes dans un ordre stable et applique le débit et le crédit dans une seule transaction locale. Le service transactions enregistre deux écritures liées par `transferId`, avec les directions `DEBIT` et `CREDIT`. La catégorie `TRANSFER` et le pays `N/A` identifient ces écritures internes.
+
+L’atomicité des deux soldes est assurée dans la base comptes. La cohérence entre cette base et la base transactions conserve la limite distribuée décrite plus haut : une réponse perdue ou un échec du commit transactions après le virement distant exige une réconciliation. Aucun retry automatique n’est appliqué.
+
+Vérification du virement sur les services démarrés : 100 MAD transférés, soldes 2500/500 devenus 2400/600. Les virements vers le même compte, au-dessus du plafond et vers un compte bloqué sont refusés. Le refus vers un compte bloqué conserve le solde source.
+
+
 ## Partie D - Microservices techniques
 
 ### 1. Eureka Discovery
@@ -467,23 +489,32 @@ Consultation des comptes par la gateway sur le port 9999 :
 
 ![Comptes via la gateway](images/gateway-accounts.png)
 
-### 9. Virement entre comptes
+## Partie E - Assistant bancaire Spring AI
 
-Le virement est exposé par `POST /transactions/transfer`, la mutation GraphQL `transfer(input)` et l’outil MCP `transfer_money`.
+Le module `ebank-bot` expose un chatbot REST sur le port 8058. Il utilise Spring AI avec le modèle Groq `openai/gpt-oss-120b`. Son client MCP se connecte aux serveurs comptes et transactions afin de consulter les données et d’exécuter les opérations explicitement demandées.
+
+Le chatbot utilise les outils MCP, sans accès direct aux repositories. Il ne doit pas inventer de comptes, d’UUID ou de soldes, ni répéter automatiquement une écriture en erreur. Chaque requête est indépendante, sans mémoire de conversation partagée.
+
+La clé `GROQ_API_KEY` est chargée depuis l’environnement ou le fichier `.env` local ignoré par Git. Le test principal se fait par REST. Un adaptateur Telegram est également présent, mais désactivé par défaut ; aucune intégration Discord n’est ajoutée.
+
+Démarrer le bot depuis la racine, après les serveurs MCP :
+
+```bash
+java -Djava.net.preferIPv4Stack=true -jar ebank-bot/target/ebank-bot-0.0.1-SNAPSHOT.jar
+```
+
+Swagger : http://localhost:8058/swagger-ui/index.html.
+
+Endpoint direct : `POST http://localhost:8058/chat`. Via la gateway : `POST http://localhost:9999/chat`.
 
 ```json
 {
-  "sourceAccountId": "UUID_SOURCE",
-  "destinationAccountId": "UUID_DESTINATION",
-  "amount": 100,
-  "currency": "MAD"
+  "query": "Liste les comptes bancaires avec leurs references clients, UUID et soldes."
 }
 ```
 
-Les comptes doivent être distincts, actifs et de même devise. Le montant doit être positif, inférieur ou égal au plafond partagé et couvert par le solde source.
+La réponse JSON contient le champ `answer`. La disponibilité du fournisseur Groq et une clé valide sont nécessaires pour produire la réponse du LLM.
 
-Le service comptes verrouille les deux lignes dans un ordre stable et applique le débit et le crédit dans une seule transaction locale. Le service transactions enregistre deux écritures liées par `transferId`, avec les directions `DEBIT` et `CREDIT`. La catégorie `TRANSFER` et le pays `N/A` identifient ces écritures internes.
+Telegram est facultatif : `TELEGRAM_ENABLED=true` et `TELEGRAM_TOKEN` permettent de l’activer. Il utilise le même assistant que REST. L’enregistrement a rencontré une erreur réseau lors de la vérification locale ; le test Telegram n’est donc pas validé.
 
-L’atomicité des deux soldes est assurée dans la base comptes. La cohérence entre cette base et la base transactions conserve la limite distribuée décrite plus haut : une réponse perdue ou un échec du commit transactions après le virement distant exige une réconciliation. Aucun retry automatique n’est appliqué.
-
-Vérification du virement sur les services démarrés : 100 MAD transférés, soldes 2500/500 devenus 2400/600. Les virements vers le même compte, au-dessus du plafond et vers un compte bloqué sont refusés. Le refus vers un compte bloqué conserve le solde source.
+Vérification REST de l’assistant : `POST /chat` a répondu 200 avec les références, UUID et soldes réels renvoyés par les outils MCP (SOURCE-VIREMENT : 2400 MAD, DESTINATION-VIREMENT : 600 MAD). Le modèle utilise `reasoning_format=hidden` afin d’éviter le renvoi d’un champ de raisonnement non accepté par Groq lors des appels d’outils.

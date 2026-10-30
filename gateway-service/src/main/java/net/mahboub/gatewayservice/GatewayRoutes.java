@@ -24,6 +24,7 @@ public class GatewayRoutes {
                         .filters(filter -> filter.stripPrefix(1)).uri("lb://account-service"))
                 .route("transaction-connectors", route -> route.path("/transaction/**")
                         .filters(filter -> filter.stripPrefix(1)).uri("lb://transaction-service"))
+                .route("chat", route -> route.path("/chat", "/chat/**").uri("lb://ebank-bot"))
                 .build();
     }
 
